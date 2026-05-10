@@ -16,7 +16,7 @@ export default function App() {
   const landmarksCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isStarted, setIsStarted] = useState(false);
   const [isReady, setIsReady] = useState(false);
-  
+
   const [activeColorIdx, setActiveColorIdx] = useState(0);
   const [brushSize, setBrushSize] = useState(8);
   const [showLandmarks, setShowLandmarks] = useState(false);
@@ -56,7 +56,7 @@ export default function App() {
     };
     window.addEventListener('resize', handleResize);
     // Add small delay to ensure DOM is ready and styled
-    const timer = setTimeout(handleResize, 100); 
+    const timer = setTimeout(handleResize, 100);
     return () => {
       window.removeEventListener('resize', handleResize);
       clearTimeout(timer);
@@ -74,7 +74,7 @@ export default function App() {
 
   const exportCanvas = useCallback(() => {
     if (!canvasRef.current || !webcamRef.current?.video) return;
-    
+
     const composite = document.createElement('canvas');
     composite.width = canvasRef.current.width;
     composite.height = canvasRef.current.height;
@@ -105,13 +105,13 @@ export default function App() {
   const onResults = useCallback((results: Results) => {
     const { canvasCtx, landmarksCtx } = stateRef.current;
     if (!canvasCtx || !canvasRef.current || !landmarksCanvasRef.current || !webcamRef.current?.video) return;
-    
+
     // Always clear landmarks canvas each frame
     if (landmarksCtx) landmarksCtx.clearRect(0, 0, landmarksCanvasRef.current.width, landmarksCanvasRef.current.height);
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
       const landmarks = results.multiHandLandmarks[0];
-      
+
       // Calculate object-cover mapping
       const videoWidth = webcamRef.current.video.videoWidth;
       const videoHeight = webcamRef.current.video.videoHeight;
@@ -153,20 +153,20 @@ export default function App() {
 
       // 3D Distance using raw landmarks for more robust gesture detection
       const getDist3D = (a: any, b: any) => Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0));
-      
+
       const wrist3D = landmarks[0];
       const indexMcp3D = landmarks[5];
       const palmSize3D = getDist3D(wrist3D, indexMcp3D);
 
       const isCurled3D = (tipIdx: number) => {
-         const tip3D = landmarks[tipIdx];
-         const pip3D = landmarks[tipIdx - 2];
-         const mcp3D = landmarks[tipIdx - 3];
-         
-         // A finger is curled if its tip is closer to the wrist than the PIP joint
-         // This is scale-invariant and unaffected by hand orientation in 3D
-         return getDist3D(tip3D, wrist3D) < getDist3D(pip3D, wrist3D) && 
-                getDist3D(tip3D, mcp3D) < getDist3D(pip3D, mcp3D);
+        const tip3D = landmarks[tipIdx];
+        const pip3D = landmarks[tipIdx - 2];
+        const mcp3D = landmarks[tipIdx - 3];
+
+        // A finger is curled if its tip is closer to the wrist than the PIP joint
+        // This is scale-invariant and unaffected by hand orientation in 3D
+        return getDist3D(tip3D, wrist3D) < getDist3D(pip3D, wrist3D) &&
+          getDist3D(tip3D, mcp3D) < getDist3D(pip3D, mcp3D);
       };
 
       // FIST: require all 4 fingers (index, middle, ring, pinky) to be curled
@@ -174,14 +174,14 @@ export default function App() {
 
       // PINCH (Draw)
       const pinchDist3D = getDist3D(thumb, tip);
-      
+
       // Hysteresis for pinch: easier to maintain a pinch than to start one
       const wasDrawing = !!stateRef.current.lastDrawPoint;
-      const pinchThreshold = wasDrawing ? (palmSize3D * 1.2) : (palmSize3D * 0.8);
-      
+      const pinchThreshold = wasDrawing ? (palmSize3D * 1.5) : (palmSize3D * 1.1);
+
       // If we are making a fist, it's definitely not a pinch (prevents false positive drawing while clearing)
       const isDrawing = (pinchDist3D < pinchThreshold) && !fist;
-      
+
       // Screen space coords for drawing
       const tipPos = mapCoords(tip);
       const thumbPos = mapCoords(thumb);
@@ -190,38 +190,38 @@ export default function App() {
       if (fist) {
         // Fist to clear
         if (!stateRef.current.isFisting) {
-           clearCanvas();
+          clearCanvas();
         }
         stateRef.current.lastDrawPoint = null;
       } else if (isDrawing) {
         // DRAW
         if (stateRef.current.lastDrawPoint) {
-           canvasCtx.beginPath();
-           canvasCtx.moveTo(stateRef.current.lastDrawPoint.x, stateRef.current.lastDrawPoint.y);
-           canvasCtx.lineTo(drawCenter.x, drawCenter.y);
-           canvasCtx.strokeStyle = stateRef.current.color;
-           canvasCtx.lineWidth = stateRef.current.brushSize;
-           canvasCtx.lineCap = 'round';
-           canvasCtx.lineJoin = 'round';
-           
-           // Glow effect
-           canvasCtx.shadowBlur = Math.max(10, stateRef.current.brushSize * 1.5);
-           canvasCtx.shadowColor = stateRef.current.color;
-           
-           canvasCtx.stroke();
-           canvasCtx.shadowBlur = 0; // reset
+          canvasCtx.beginPath();
+          canvasCtx.moveTo(stateRef.current.lastDrawPoint.x, stateRef.current.lastDrawPoint.y);
+          canvasCtx.lineTo(drawCenter.x, drawCenter.y);
+          canvasCtx.strokeStyle = stateRef.current.color;
+          canvasCtx.lineWidth = stateRef.current.brushSize;
+          canvasCtx.lineCap = 'round';
+          canvasCtx.lineJoin = 'round';
+
+          // Glow effect
+          canvasCtx.shadowBlur = Math.max(10, stateRef.current.brushSize * 1.5);
+          canvasCtx.shadowColor = stateRef.current.color;
+
+          canvasCtx.stroke();
+          canvasCtx.shadowBlur = 0; // reset
         }
         stateRef.current.lastDrawPoint = drawCenter;
 
         // Draw active cursor on landmarks canvas
         if (landmarksCtx && !stateRef.current.showLandmarks) {
-           landmarksCtx.beginPath();
-           landmarksCtx.arc(drawCenter.x, drawCenter.y, stateRef.current.brushSize / 2 + 2, 0, 2 * Math.PI);
-           landmarksCtx.fillStyle = '#FFFFFF';
-           landmarksCtx.shadowBlur = 15;
-           landmarksCtx.shadowColor = '#FFFFFF';
-           landmarksCtx.fill();
-           landmarksCtx.shadowBlur = 0;
+          landmarksCtx.beginPath();
+          landmarksCtx.arc(drawCenter.x, drawCenter.y, stateRef.current.brushSize / 2 + 2, 0, 2 * Math.PI);
+          landmarksCtx.fillStyle = '#FFFFFF';
+          landmarksCtx.shadowBlur = 15;
+          landmarksCtx.shadowColor = '#FFFFFF';
+          landmarksCtx.fill();
+          landmarksCtx.shadowBlur = 0;
         }
       } else {
         // HOVER
@@ -229,12 +229,12 @@ export default function App() {
 
         // Draw hover cursor on landmarks canvas
         if (landmarksCtx && !stateRef.current.showLandmarks) {
-           landmarksCtx.beginPath();
-           landmarksCtx.arc(tipPos.x, tipPos.y, stateRef.current.brushSize / 2 + 2, 0, 2 * Math.PI);
-           landmarksCtx.fillStyle = stateRef.current.color;
-           landmarksCtx.globalAlpha = 0.5;
-           landmarksCtx.fill();
-           landmarksCtx.globalAlpha = 1.0;
+          landmarksCtx.beginPath();
+          landmarksCtx.arc(tipPos.x, tipPos.y, stateRef.current.brushSize / 2 + 2, 0, 2 * Math.PI);
+          landmarksCtx.fillStyle = stateRef.current.color;
+          landmarksCtx.globalAlpha = 0.5;
+          landmarksCtx.fill();
+          landmarksCtx.globalAlpha = 1.0;
         }
       }
     } else {
@@ -278,7 +278,7 @@ export default function App() {
             }
           });
           camera.start().then(() => {
-             if (isMounted) setIsReady(true);
+            if (isMounted) setIsReady(true);
           });
         }
       } catch (err) {
@@ -300,7 +300,7 @@ export default function App() {
       if (hands) {
         try {
           hands.close();
-        } catch (e) {}
+        } catch (e) { }
       }
     };
   }, [onResults, isStarted]);
@@ -310,21 +310,21 @@ export default function App() {
       {/* INITIAL PROMPT STATE */}
       {!isStarted && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] bg-black/95 backdrop-blur-lg px-4 sm:px-8">
-           <h1 className="font-mono text-4xl sm:text-5xl md:text-6xl font-bold text-primary mb-6 tracking-[0.2em] drop-shadow-[0_0_15px_rgba(240,240,240,0.8)] text-center break-keep">
-             AIR WRITER
-           </h1>
-           <p className="font-sans text-secondary mb-12 max-w-[500px] w-full text-center leading-relaxed text-base sm:text-lg">
-             Hold up your hand to move the cursor.<br/>
-             Pinch your index and thumb to draw.<br/>
-             Make a fist to clear the canvas.
-           </p>
-           <button 
-             onClick={() => setIsStarted(true)}
-             className="bg-primary text-on-primary px-8 sm:px-10 py-3 sm:py-4 rounded-full font-bold uppercase tracking-[0.2em] hover:scale-105 active:scale-95 transition-transform flex items-center justify-center gap-3 text-xs sm:text-sm shrink-0 w-max"
-           >
-             <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>videocam</span>
-             Start Camera
-           </button>
+          <h1 className="font-mono text-4xl sm:text-5xl md:text-6xl font-bold text-primary mb-6 tracking-[0.2em] drop-shadow-[0_0_15px_rgba(240,240,240,0.8)] text-center break-keep">
+            AIR WRITER
+          </h1>
+          <p className="font-sans text-secondary mb-12 max-w-[500px] w-full text-center leading-relaxed text-base sm:text-lg">
+            Hold up your hand to move the cursor.<br />
+            Pinch your index and thumb to draw.<br />
+            Make a fist to clear the canvas.
+          </p>
+          <button
+            onClick={() => setIsStarted(true)}
+            className="bg-primary text-on-primary px-8 sm:px-10 py-3 sm:py-4 rounded-full font-bold uppercase tracking-[0.2em] hover:scale-105 active:scale-95 transition-transform flex items-center justify-center gap-3 text-xs sm:text-sm shrink-0 w-max"
+          >
+            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>videocam</span>
+            Start Camera
+          </button>
         </div>
       )}
 
@@ -369,10 +369,10 @@ export default function App() {
 
       {/* Main Content Info */}
       {isStarted && !isReady && (
-         <div className="absolute inset-0 flex flex-col items-center justify-center z-30 pointer-events-none bg-black/80 backdrop-blur-sm">
-             <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />
-             <p className="font-headline-md text-primary tracking-widest animate-pulse">WARMING UP CAMERA...</p>
-         </div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-30 pointer-events-none bg-black/80 backdrop-blur-sm">
+          <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />
+          <p className="font-headline-md text-primary tracking-widest animate-pulse">WARMING UP CAMERA...</p>
+        </div>
       )}
 
       {/* HUD Info */}
@@ -398,72 +398,72 @@ export default function App() {
 
           {/* Bottom Nav / Controls */}
           <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[95%] md:w-max max-w-[500px] md:max-w-none z-50 flex flex-col md:flex-row gap-3 md:gap-md p-3 md:p-sm glass-panel bg-surface-container/80 rounded-[2rem] md:rounded-full backdrop-blur-xl border border-outline-variant/10 shadow-2xl items-center pointer-events-auto">
-            
+
             {/* Top row on mobile: Colors and Brush size */}
             <div className="flex w-full md:w-auto items-center justify-between md:justify-start gap-4 md:gap-2 px-2 md:border-r md:border-outline-variant/30 md:pr-4">
-                {/* Colors */}
-                <div className="flex gap-2 overflow-x-auto hide-scrollbar scroll-smooth snap-x pb-1 md:pb-0">
-                    {COLORS.map((color, idx) => (
-                    <button 
-                        key={color}
-                        onClick={() => setActiveColorIdx(idx)}
-                        className={`shrink-0 snap-center w-8 h-8 md:w-10 md:h-10 rounded-full border-2 transition-all duration-200 ${activeColorIdx === idx ? 'border-primary shadow-[0_0_15px_rgba(255,255,255,0.7)] scale-110' : 'border-transparent hover:border-primary/50'}`}
-                        style={{ backgroundColor: color }}
-                    />
-                    ))}
-                </div>
+              {/* Colors */}
+              <div className="flex gap-2 overflow-x-auto hide-scrollbar scroll-smooth snap-x pb-1 md:pb-0">
+                {COLORS.map((color, idx) => (
+                  <button
+                    key={color}
+                    onClick={() => setActiveColorIdx(idx)}
+                    className={`shrink-0 snap-center w-8 h-8 md:w-10 md:h-10 rounded-full border-2 transition-all duration-200 ${activeColorIdx === idx ? 'border-primary shadow-[0_0_15px_rgba(255,255,255,0.7)] scale-110' : 'border-transparent hover:border-primary/50'}`}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
             </div>
 
             {/* Brush Size */}
             <div className="flex w-full md:w-auto items-center justify-between md:justify-center gap-3 px-2 md:px-4 md:border-r md:border-outline-variant/30">
-                <span className="material-symbols-outlined text-secondary text-sm">line_weight</span>
-                <input 
-                    type="range" 
-                    min="2" max="30" 
-                    value={brushSize}
-                    onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                    className="flex-grow md:w-32 accent-primary h-1.5 bg-surface-variant rounded-lg appearance-none cursor-pointer"
-                />
+              <span className="material-symbols-outlined text-secondary text-sm">line_weight</span>
+              <input
+                type="range"
+                min="2" max="30"
+                value={brushSize}
+                onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                className="flex-grow md:w-32 accent-primary h-1.5 bg-surface-variant rounded-lg appearance-none cursor-pointer"
+              />
             </div>
-            
+
             {/* Actions */}
             <div className="flex w-full md:w-auto items-center justify-around md:justify-center gap-1 px-1 pt-2 border-t border-outline-variant/30 md:border-t-0 md:pt-0">
-                <button 
-                    onClick={() => setShowLandmarks(s => !s)}
-                    className={`flex flex-col items-center justify-center py-2 px-1 sm:px-3 rounded-xl transition-all w-16 sm:w-20 md:w-24 ${showLandmarks ? 'bg-[#02f71b]/20 text-[#02f71b]' : 'text-on-surface-variant hover:text-primary hover:bg-white/5'}`}
-                >
+              <button
+                onClick={() => setShowLandmarks(s => !s)}
+                className={`flex flex-col items-center justify-center py-2 px-1 sm:px-3 rounded-xl transition-all w-16 sm:w-20 md:w-24 ${showLandmarks ? 'bg-[#02f71b]/20 text-[#02f71b]' : 'text-on-surface-variant hover:text-primary hover:bg-white/5'}`}
+              >
                 <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>visibility</span>
                 <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Marks</span>
-                </button>
+              </button>
 
-                <button 
-                    onClick={exportCanvas}
-                    className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-20 md:w-24"
-                >
+              <button
+                onClick={exportCanvas}
+                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-20 md:w-24"
+              >
                 <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>photo_camera</span>
                 <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Save</span>
-                </button>
-                
-                <button 
-                    onClick={clearCanvas}
-                    className="flex flex-col items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-20 md:w-24"
-                >
+              </button>
+
+              <button
+                onClick={clearCanvas}
+                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-20 md:w-24"
+              >
                 <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>delete_sweep</span>
                 <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Clear</span>
-                </button>
+              </button>
 
-                <div className="hidden md:block w-px h-8 bg-outline-variant/30 my-auto mx-1"></div>
+              <div className="hidden md:block w-px h-8 bg-outline-variant/30 my-auto mx-1"></div>
 
-                <button 
-                    onClick={() => {
-                      setIsStarted(false);
-                      setIsReady(false);
-                    }}
-                    className="flex flex-col items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-20 md:w-24"
-                >
+              <button
+                onClick={() => {
+                  setIsStarted(false);
+                  setIsReady(false);
+                }}
+                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-20 md:w-24"
+              >
                 <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>stop_circle</span>
                 <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Stop</span>
-                </button>
+              </button>
             </div>
 
           </nav>
