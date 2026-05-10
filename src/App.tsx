@@ -176,7 +176,7 @@ export default function App() {
       const pinchDist = getDistObj(tipPos, thumbPos);
       const mcpIndexPos = mapCoords(landmarks[5]);
       const palmSize = getDistObj(wristPos, mcpIndexPos);
-      const isDrawing = pinchDist < palmSize * 0.4; // 0.4 threshold relative to hand size
+      const isDrawing = pinchDist < palmSize * 0.75; // 0.75 threshold relative to hand size for easier drawing
       const drawCenter = { x: (tipPos.x + thumbPos.x) / 2, y: (tipPos.y + thumbPos.y) / 2 };
 
       if (fist) {

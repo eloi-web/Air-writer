@@ -1,20 +1,51 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Air Writer
 
-# Run and deploy your AI Studio app
+Air Writer is a web application that allows you to draw in thin air using hand gestures. It uses MediaPipe for real-time hand tracking and HTML5 Canvas for rendering.
 
-This contains everything you need to run your app locally.
+## Features
 
-View your app in AI Studio: https://ai.studio/apps/c2b4473b-2ed3-4150-85e1-277e695e3a14
+- **Pinch to Draw:** Move your hand to move the cursor, and pinch your index finger and thumb together to draw.
+- **Fist to Clear:** Close your hand into a fist to clear the canvas.
+- **Adjustable Brush:** Change the brush size to draw thicker or thinner lines.
+- **Color Selection:** Pick from multiple vibrant colors.
+- **Save Art:** Take a snapshot of your drawing and save it as a PNG image.
+- **Landmarks View:** Toggle hand landmarks to see what the AI sees under the hood.
 
-## Run Locally
+## Requirements
 
-**Prerequisites:**  Node.js
+- A modern browser with WebGL support
+- A webcam
 
+## Scripts
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Installs all dependencies:
+```sh
+npm install
+```
+
+Starts the local development server:
+```sh
+npm run dev
+```
+
+Builds the application for production:
+```sh
+npm run build
+```
+
+Previews the compiled production build:
+```sh
+npm run preview
+```
+
+## Technical Details
+
+We use:
+- **React + TypeScript + Vite** for the frontend application.
+- **Tailwind CSS** for styling interfaces and responsiveness.
+- **@mediapipe/hands** from Google to perform hand gesture recognition.
+- **react-webcam** to access device cameras.
+
+## License
+
+MIT
