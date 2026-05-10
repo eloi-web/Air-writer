@@ -147,36 +147,44 @@ export default function App() {
         }
       }
 
-      // Extract keypoints
+      // Extract keypoints for drawing
       const tip = landmarks[8]; // Index tip
       const thumb = landmarks[4]; // Thumb tip
 
-      const tipPos = mapCoords(tip);
-      const thumbPos = mapCoords(thumb);
-
-      // Gesture points
-      const wrist = landmarks[0];
-      const wristPos = mapCoords(wrist);
-      const getDistObj = (a: any, b: any) => Math.hypot(a.x - b.x, a.y - b.y);
+      // 3D Distance using raw landmarks for more robust gesture detection
+      const getDist3D = (a: any, b: any) => Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0));
       
-      const isCurled = (tipIdx: number) => {
-         const tPos = mapCoords(landmarks[tipIdx]);
-         const pipPos = mapCoords(landmarks[tipIdx - 2]);
-         const mcpPos = mapCoords(landmarks[tipIdx - 3]);
+      const wrist3D = landmarks[0];
+      const indexMcp3D = landmarks[5];
+      const palmSize3D = getDist3D(wrist3D, indexMcp3D);
 
-         // A finger is curled if the tip is closer to the wrist than the PIP joint
-         // and closer to the MCP than the PIP joint
-         return getDistObj(tPos, wristPos) < getDistObj(pipPos, wristPos) &&
-                getDistObj(tPos, mcpPos) < getDistObj(pipPos, mcpPos);
+      const isCurled3D = (tipIdx: number) => {
+         const tip3D = landmarks[tipIdx];
+         const pip3D = landmarks[tipIdx - 2];
+         const mcp3D = landmarks[tipIdx - 3];
+         
+         // A finger is curled if its tip is closer to the wrist than the PIP joint
+         // This is scale-invariant and unaffected by hand orientation in 3D
+         return getDist3D(tip3D, wrist3D) < getDist3D(pip3D, wrist3D) && 
+                getDist3D(tip3D, mcp3D) < getDist3D(pip3D, mcp3D);
       };
 
-      const fist = isCurled(8) && isCurled(12) && isCurled(16) && isCurled(20);
+      // FIST: require all 4 fingers (index, middle, ring, pinky) to be curled
+      const fist = isCurled3D(8) && isCurled3D(12) && isCurled3D(16) && isCurled3D(20);
 
-      // Gesture: PINCH (Draw)
-      const pinchDist = getDistObj(tipPos, thumbPos);
-      const mcpIndexPos = mapCoords(landmarks[5]);
-      const palmSize = getDistObj(wristPos, mcpIndexPos);
-      const isDrawing = pinchDist < palmSize * 0.75; // 0.75 threshold relative to hand size for easier drawing
+      // PINCH (Draw)
+      const pinchDist3D = getDist3D(thumb, tip);
+      
+      // Hysteresis for pinch: easier to maintain a pinch than to start one
+      const wasDrawing = !!stateRef.current.lastDrawPoint;
+      const pinchThreshold = wasDrawing ? (palmSize3D * 1.2) : (palmSize3D * 0.8);
+      
+      // If we are making a fist, it's definitely not a pinch (prevents false positive drawing while clearing)
+      const isDrawing = (pinchDist3D < pinchThreshold) && !fist;
+      
+      // Screen space coords for drawing
+      const tipPos = mapCoords(tip);
+      const thumbPos = mapCoords(thumb);
       const drawCenter = { x: (tipPos.x + thumbPos.x) / 2, y: (tipPos.y + thumbPos.y) / 2 };
 
       if (fist) {
