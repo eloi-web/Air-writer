@@ -5,10 +5,16 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Webcam from 'react-webcam';
-import { Hands, Results, LandmarkList } from '@mediapipe/hands';
+import { Hands, Results } from '@mediapipe/hands';
 import { Camera } from '@mediapipe/camera_utils';
 
 const COLORS = ['#02f71b', '#F0F0F0', '#FF3B30', '#007AFF', '#FFCC00', '#FF00FF'];
+
+// Stroke smoothing: exponential moving average factor (0=no smoothing, 1=full lag)
+const SMOOTHING = 0.5;
+
+// How many frames a finger must hover over a color swatch to select it
+const COLOR_DWELL_FRAMES = 45; // ~1.5s at 30fps
 
 export default function App() {
   const webcamRef = useRef<Webcam>(null);
@@ -21,6 +27,15 @@ export default function App() {
   const [brushSize, setBrushSize] = useState(8);
   const [showLandmarks, setShowLandmarks] = useState(false);
   const [isFisting, setIsFisting] = useState(false);
+  const [isErasing, setIsErasing] = useState(false);
+  // dwellIdx: which color swatch the right-hand index is hovering (-1 = none), dwellProgress 0–1
+  const [dwellIdx, setDwellIdx] = useState(-1);
+  const [dwellProgress, setDwellProgress] = useState(0);
+
+  // Undo history: array of ImageData snapshots
+  const undoStackRef = useRef<ImageData[]>([]);
+  // Color swatch DOM refs for gesture hit-testing
+  const colorSwatchRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   // We keep mutable state in refs to avoid adding them to onResults dependencies
   const stateRef = useRef({
@@ -28,9 +43,17 @@ export default function App() {
     brushSize: 8,
     showLandmarks: false,
     isFisting: false,
+    isErasing: false,
     lastDrawPoint: null as { x: number, y: number } | null,
+    smoothedPoint: null as { x: number, y: number } | null,
     canvasCtx: null as CanvasRenderingContext2D | null,
     landmarksCtx: null as CanvasRenderingContext2D | null,
+    // color dwell tracking
+    dwellIdx: -1,
+    dwellFrames: 0,
+    // left-hand undo pinch tracking
+    leftPinchWasActive: false,
+    leftFistWasActive: false,
   });
 
   // Sync state to refs
@@ -39,23 +62,33 @@ export default function App() {
     stateRef.current.brushSize = brushSize;
     stateRef.current.showLandmarks = showLandmarks;
     stateRef.current.isFisting = isFisting;
-  }, [activeColorIdx, brushSize, showLandmarks, isFisting]);
+    stateRef.current.isErasing = isErasing;
+  }, [activeColorIdx, brushSize, showLandmarks, isFisting, isErasing]);
 
   // Handle Resize
   useEffect(() => {
     const handleResize = () => {
       if (canvasRef.current && landmarksCanvasRef.current) {
+        // Save current drawing before resize
+        const ctx = canvasRef.current.getContext('2d');
+        let saved: ImageData | null = null;
+        if (ctx && canvasRef.current.width > 0 && canvasRef.current.height > 0) {
+          saved = ctx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height);
+        }
+
         canvasRef.current.width = canvasRef.current.offsetWidth;
         canvasRef.current.height = canvasRef.current.offsetHeight;
         landmarksCanvasRef.current.width = landmarksCanvasRef.current.offsetWidth;
         landmarksCanvasRef.current.height = landmarksCanvasRef.current.offsetHeight;
-        // Re-get contexts
         stateRef.current.canvasCtx = canvasRef.current.getContext('2d');
         stateRef.current.landmarksCtx = landmarksCanvasRef.current.getContext('2d');
+
+        if (saved && stateRef.current.canvasCtx) {
+          stateRef.current.canvasCtx.putImageData(saved, 0, 0);
+        }
       }
     };
     window.addEventListener('resize', handleResize);
-    // Add small delay to ensure DOM is ready and styled
     const timer = setTimeout(handleResize, 100);
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -63,14 +96,49 @@ export default function App() {
     };
   }, [isStarted]);
 
+  // Keyboard undo: Ctrl+Z
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        undoLastStroke();
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, []);
+
+  // Save current canvas state to undo stack (call before each stroke)
+  const saveSnapshot = useCallback(() => {
+    const ctx = stateRef.current.canvasCtx;
+    const canvas = canvasRef.current;
+    if (!ctx || !canvas || canvas.width === 0 || canvas.height === 0) return;
+    const snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    undoStackRef.current.push(snapshot);
+    // Keep max 20 snapshots to avoid memory bloat
+    if (undoStackRef.current.length > 20) undoStackRef.current.shift();
+  }, []);
+
+  const undoLastStroke = useCallback(() => {
+    const ctx = stateRef.current.canvasCtx;
+    const canvas = canvasRef.current;
+    if (!ctx || !canvas || undoStackRef.current.length === 0) return;
+    const prev = undoStackRef.current.pop()!;
+    ctx.putImageData(prev, 0, 0);
+    stateRef.current.lastDrawPoint = null;
+    stateRef.current.smoothedPoint = null;
+  }, []);
+
   const clearCanvas = useCallback(() => {
-    if (stateRef.current.canvasCtx && canvasRef.current) {
-      stateRef.current.canvasCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    const ctx = stateRef.current.canvasCtx;
+    const canvas = canvasRef.current;
+    if (ctx && canvas) {
+      saveSnapshot();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
-    // Visual feedback
     setIsFisting(true);
     setTimeout(() => setIsFisting(false), 500);
-  }, []);
+  }, [saveSnapshot]);
 
   const exportCanvas = useCallback(() => {
     if (!canvasRef.current || !webcamRef.current?.video) return;
@@ -86,14 +154,12 @@ export default function App() {
     const offsetX = (composite.width - video.videoWidth * scale) / 2;
     const offsetY = (composite.height - video.videoHeight * scale) / 2;
 
-    // Draw video flipped horizontally to match the screen view
     ctx.save();
     ctx.translate(composite.width, 0);
     ctx.scale(-1, 1);
     ctx.drawImage(video, offsetX, offsetY, video.videoWidth * scale, video.videoHeight * scale);
     ctx.restore();
 
-    // Draw the drawing canvas over it
     ctx.drawImage(canvasRef.current, 0, 0);
 
     const link = document.createElement('a');
@@ -106,128 +172,239 @@ export default function App() {
     const { canvasCtx, landmarksCtx } = stateRef.current;
     if (!canvasCtx || !canvasRef.current || !landmarksCanvasRef.current || !webcamRef.current?.video) return;
 
-    // Always clear landmarks canvas each frame
     if (landmarksCtx) landmarksCtx.clearRect(0, 0, landmarksCanvasRef.current.width, landmarksCanvasRef.current.height);
 
-    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-      const landmarks = results.multiHandLandmarks[0];
+    const videoWidth = webcamRef.current.video.videoWidth;
+    const videoHeight = webcamRef.current.video.videoHeight;
+    const windowWidth = canvasRef.current.width;
+    const windowHeight = canvasRef.current.height;
+    if (!videoWidth || !videoHeight) return;
 
-      // Calculate object-cover mapping
-      const videoWidth = webcamRef.current.video.videoWidth;
-      const videoHeight = webcamRef.current.video.videoHeight;
-      const windowWidth = canvasRef.current.width;
-      const windowHeight = canvasRef.current.height;
-      if (!videoWidth || !videoHeight) return;
+    const scale = Math.max(windowWidth / videoWidth, windowHeight / videoHeight);
+    const offsetX = (windowWidth - videoWidth * scale) / 2;
+    const offsetY = (windowHeight - videoHeight * scale) / 2;
 
-      const videoAspect = videoWidth / videoHeight;
-      const windowAspect = windowWidth / windowHeight;
+    const mapCoords = (lm: any) => ({
+      x: (1 - lm.x) * videoWidth * scale + offsetX,
+      y: lm.y * videoHeight * scale + offsetY,
+    });
 
-      const scale = Math.max(windowWidth / videoWidth, windowHeight / videoHeight);
-      const offsetX = (windowWidth - videoWidth * scale) / 2;
-      const offsetY = (windowHeight - videoHeight * scale) / 2;
+    const getDist3D = (a: any, b: any) => Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0));
 
-      const mapCoords = (lm: any) => {
-        // Mirrored X because the video is flipped via scale-x-[-1]
-        const videoX = (1 - lm.x) * videoWidth;
-        const videoY = lm.y * videoHeight;
-        return {
-          x: videoX * scale + offsetX,
-          y: videoY * scale + offsetY
-        };
-      };
+    const isCurled3D = (landmarks: any[], tipIdx: number) => {
+      const tip3D = landmarks[tipIdx];
+      const pip3D = landmarks[tipIdx - 2];
+      const mcp3D = landmarks[tipIdx - 3];
+      const wrist3D = landmarks[0];
+      return getDist3D(tip3D, wrist3D) < getDist3D(pip3D, wrist3D) &&
+        getDist3D(tip3D, mcp3D) < getDist3D(pip3D, mcp3D);
+    };
 
-      // Draw landmarks if toggled
+    // ─── SEPARATE HANDS BY HANDEDNESS ───────────────────────────────────────
+    let rightLandmarks: any[] | null = null;
+    let leftLandmarks: any[] | null = null;
+
+    if (results.multiHandLandmarks && results.multiHandedness) {
+      results.multiHandLandmarks.forEach((lm, i) => {
+        // MediaPipe labels from camera's perspective; mirrored video flips left/right
+        const label = results.multiHandedness![i]?.label;
+        if (label === 'Left') rightLandmarks = lm;   // camera-left = user-right (mirrored)
+        else leftLandmarks = lm;
+      });
+    }
+
+    // ─── LEFT HAND: UNDO (pinch) and CLEAR (fist) ───────────────────────────
+    if (leftLandmarks) {
+      const lm = leftLandmarks as any[];
+      const wrist3D = lm[0];
+      const palmSize3D = getDist3D(wrist3D, lm[5]);
+      const thumb = lm[4];
+      const indexTip = lm[8];
+      const leftFist = isCurled3D(lm, 8) && isCurled3D(lm, 12) && isCurled3D(lm, 16) && isCurled3D(lm, 20);
+      const leftPinch = getDist3D(thumb, indexTip) < palmSize3D * 0.7;
+
+      if (leftFist && !stateRef.current.leftFistWasActive) {
+        clearCanvas();
+      }
+      stateRef.current.leftFistWasActive = leftFist;
+
+      if (leftPinch && !stateRef.current.leftPinchWasActive) {
+        undoLastStroke();
+      }
+      stateRef.current.leftPinchWasActive = leftPinch;
+
+      // Draw left-hand indicator
+      if (landmarksCtx) {
+        const tipPos = mapCoords(indexTip);
+        landmarksCtx.beginPath();
+        landmarksCtx.arc(tipPos.x, tipPos.y, 12, 0, 2 * Math.PI);
+        landmarksCtx.fillStyle = leftPinch ? 'rgba(255,200,0,0.7)' : leftFist ? 'rgba(255,60,60,0.7)' : 'rgba(255,200,0,0.3)';
+        landmarksCtx.fill();
+      }
+    } else {
+      stateRef.current.leftFistWasActive = false;
+      stateRef.current.leftPinchWasActive = false;
+    }
+
+    // ─── RIGHT HAND: DRAW / ERASE / COLOR PICK ──────────────────────────────
+    if (rightLandmarks) {
+      const lm = rightLandmarks as any[];
+      const wrist3D = lm[0];
+      const palmSize3D = getDist3D(wrist3D, lm[5]);
+      const tip = lm[8];
+      const thumb = lm[4];
+
+      const fist = isCurled3D(lm, 8) && isCurled3D(lm, 12) && isCurled3D(lm, 16) && isCurled3D(lm, 20);
+
+      // ERASER: only middle finger extended, rest curled (index, ring, pinky curled)
+      const eraserGesture = isCurled3D(lm, 8) && !isCurled3D(lm, 12) && isCurled3D(lm, 16) && isCurled3D(lm, 20);
+      setIsErasing(eraserGesture);
+      stateRef.current.isErasing = eraserGesture;
+
+      // Landmark display
       if (stateRef.current.showLandmarks && landmarksCtx) {
         landmarksCtx.fillStyle = '#FF3B30';
-        for (const lm of landmarks) {
-          const pt = mapCoords(lm);
+        for (const point of lm) {
+          const pt = mapCoords(point);
           landmarksCtx.beginPath();
           landmarksCtx.arc(pt.x, pt.y, 3, 0, 2 * Math.PI);
           landmarksCtx.fill();
         }
       }
 
-      // Extract keypoints for drawing
-      const tip = landmarks[8]; // Index tip
-      const thumb = landmarks[4]; // Thumb tip
-
-      // 3D Distance using raw landmarks for more robust gesture detection
-      const getDist3D = (a: any, b: any) => Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0));
-
-      const wrist3D = landmarks[0];
-      const indexMcp3D = landmarks[5];
-      const palmSize3D = getDist3D(wrist3D, indexMcp3D);
-
-      const isCurled3D = (tipIdx: number) => {
-        const tip3D = landmarks[tipIdx];
-        const pip3D = landmarks[tipIdx - 2];
-        const mcp3D = landmarks[tipIdx - 3];
-
-        // A finger is curled if its tip is closer to the wrist than the PIP joint
-        // This is scale-invariant and unaffected by hand orientation in 3D
-        return getDist3D(tip3D, wrist3D) < getDist3D(pip3D, wrist3D) &&
-          getDist3D(tip3D, mcp3D) < getDist3D(pip3D, mcp3D);
-      };
-
-      // FIST: require all 4 fingers (index, middle, ring, pinky) to be curled
-      const fist = isCurled3D(8) && isCurled3D(12) && isCurled3D(16) && isCurled3D(20);
-
-      // PINCH (Draw)
-      const pinchDist3D = getDist3D(thumb, tip);
-
-      // Hysteresis for pinch: easier to maintain a pinch than to start one
-      const wasDrawing = !!stateRef.current.lastDrawPoint;
-      const pinchThreshold = wasDrawing ? (palmSize3D * 1.5) : (palmSize3D * 1.1);
-
-      // If we are making a fist, it's definitely not a pinch (prevents false positive drawing while clearing)
-      const isDrawing = (pinchDist3D < pinchThreshold) && !fist;
-
-      // Screen space coords for drawing
       const tipPos = mapCoords(tip);
       const thumbPos = mapCoords(thumb);
-      const drawCenter = { x: (tipPos.x + thumbPos.x) / 2, y: (tipPos.y + thumbPos.y) / 2 };
+      const middleTip = lm[12];
+      const middlePos = mapCoords(middleTip);
 
-      if (fist) {
-        // Fist to clear
-        if (!stateRef.current.isFisting) {
+      // PINCH detection with hysteresis
+      const pinchDist3D = getDist3D(thumb, tip);
+      const wasDrawing = !!stateRef.current.lastDrawPoint;
+      const pinchThreshold = wasDrawing ? palmSize3D * 1.5 : palmSize3D * 1.1;
+      const isPinching = pinchDist3D < pinchThreshold && !fist;
+
+      // Active draw point: midpoint of pinch
+      const rawPoint = { x: (tipPos.x + thumbPos.x) / 2, y: (tipPos.y + thumbPos.y) / 2 };
+
+      // Eraser uses middle fingertip as draw point
+      const erasePoint = middlePos;
+
+      // ── COLOR PICKER VIA DWELL ─────────────────────────────────────────────
+      // Only do color dwell when NOT drawing/erasing
+      if (!isPinching && !eraserGesture) {
+        let foundSwatchIdx = -1;
+        const swatchRefs = colorSwatchRefs.current;
+        for (let i = 0; i < swatchRefs.length; i++) {
+          const el = swatchRefs[i];
+          if (!el) continue;
+          const rect = el.getBoundingClientRect();
+          // Convert tipPos (canvas px) to screen px
+          const canvasEl = landmarksCanvasRef.current!;
+          const canvasRect = canvasEl.getBoundingClientRect();
+          const screenX = canvasRect.left + tipPos.x * (canvasRect.width / canvasEl.width);
+          const screenY = canvasRect.top + tipPos.y * (canvasRect.height / canvasEl.height);
+          if (screenX >= rect.left && screenX <= rect.right && screenY >= rect.top && screenY <= rect.bottom) {
+            foundSwatchIdx = i;
+            break;
+          }
+        }
+
+        if (foundSwatchIdx !== -1 && foundSwatchIdx === stateRef.current.dwellIdx) {
+          stateRef.current.dwellFrames++;
+          const progress = stateRef.current.dwellFrames / COLOR_DWELL_FRAMES;
+          setDwellProgress(Math.min(progress, 1));
+          if (stateRef.current.dwellFrames >= COLOR_DWELL_FRAMES) {
+            setActiveColorIdx(foundSwatchIdx);
+            stateRef.current.color = COLORS[foundSwatchIdx];
+            stateRef.current.dwellFrames = 0;
+            setDwellProgress(0);
+          }
+        } else {
+          stateRef.current.dwellIdx = foundSwatchIdx;
+          stateRef.current.dwellFrames = 0;
+          setDwellIdx(foundSwatchIdx);
+          setDwellProgress(0);
+        }
+      } else {
+        stateRef.current.dwellIdx = -1;
+        stateRef.current.dwellFrames = 0;
+        setDwellIdx(-1);
+        setDwellProgress(0);
+      }
+
+      // ── DRAW / ERASE ────────────────────────────────────────────────────────
+      const activePoint = eraserGesture ? erasePoint : rawPoint;
+
+      // Smooth the point via exponential moving average
+      if (stateRef.current.smoothedPoint) {
+        stateRef.current.smoothedPoint = {
+          x: stateRef.current.smoothedPoint.x * SMOOTHING + activePoint.x * (1 - SMOOTHING),
+          y: stateRef.current.smoothedPoint.y * SMOOTHING + activePoint.y * (1 - SMOOTHING),
+        };
+      } else {
+        stateRef.current.smoothedPoint = { ...activePoint };
+      }
+      const smoothed = stateRef.current.smoothedPoint;
+
+      if (fist && !eraserGesture) {
+        // Right-hand fist only clears when NO left hand (left hand handles undo/clear)
+        if (!leftLandmarks && !stateRef.current.isFisting) {
           clearCanvas();
         }
         stateRef.current.lastDrawPoint = null;
-      } else if (isDrawing) {
-        // DRAW
+        stateRef.current.smoothedPoint = null;
+      } else if (isPinching || eraserGesture) {
         if (stateRef.current.lastDrawPoint) {
+          // Save snapshot at stroke start (first segment)
+          if (!wasDrawing) saveSnapshot();
+
           canvasCtx.beginPath();
           canvasCtx.moveTo(stateRef.current.lastDrawPoint.x, stateRef.current.lastDrawPoint.y);
-          canvasCtx.lineTo(drawCenter.x, drawCenter.y);
-          canvasCtx.strokeStyle = stateRef.current.color;
-          canvasCtx.lineWidth = stateRef.current.brushSize;
+          canvasCtx.lineTo(smoothed.x, smoothed.y);
+          canvasCtx.lineWidth = eraserGesture ? stateRef.current.brushSize * 3 : stateRef.current.brushSize;
           canvasCtx.lineCap = 'round';
           canvasCtx.lineJoin = 'round';
 
-          // Glow effect
-          canvasCtx.shadowBlur = Math.max(10, stateRef.current.brushSize * 1.5);
-          canvasCtx.shadowColor = stateRef.current.color;
-
+          if (eraserGesture) {
+            canvasCtx.globalCompositeOperation = 'destination-out';
+            canvasCtx.strokeStyle = 'rgba(0,0,0,1)';
+            canvasCtx.shadowBlur = 0;
+          } else {
+            canvasCtx.globalCompositeOperation = 'source-over';
+            canvasCtx.strokeStyle = stateRef.current.color;
+            canvasCtx.shadowBlur = Math.max(10, stateRef.current.brushSize * 1.5);
+            canvasCtx.shadowColor = stateRef.current.color;
+          }
           canvasCtx.stroke();
-          canvasCtx.shadowBlur = 0; // reset
+          canvasCtx.shadowBlur = 0;
+          canvasCtx.globalCompositeOperation = 'source-over';
+        } else {
+          // Stroke just started — save snapshot before first draw
+          saveSnapshot();
         }
-        stateRef.current.lastDrawPoint = drawCenter;
+        stateRef.current.lastDrawPoint = smoothed;
 
-        // Draw active cursor on landmarks canvas
+        // Cursor
         if (landmarksCtx && !stateRef.current.showLandmarks) {
           landmarksCtx.beginPath();
-          landmarksCtx.arc(drawCenter.x, drawCenter.y, stateRef.current.brushSize / 2 + 2, 0, 2 * Math.PI);
-          landmarksCtx.fillStyle = '#FFFFFF';
+          const r = (eraserGesture ? stateRef.current.brushSize * 3 : stateRef.current.brushSize) / 2 + 2;
+          landmarksCtx.arc(smoothed.x, smoothed.y, r, 0, 2 * Math.PI);
+          landmarksCtx.fillStyle = eraserGesture ? 'rgba(255,255,255,0.4)' : '#FFFFFF';
           landmarksCtx.shadowBlur = 15;
-          landmarksCtx.shadowColor = '#FFFFFF';
+          landmarksCtx.shadowColor = eraserGesture ? '#FFFFFF' : stateRef.current.color;
           landmarksCtx.fill();
           landmarksCtx.shadowBlur = 0;
+          if (eraserGesture) {
+            landmarksCtx.strokeStyle = 'rgba(255,255,255,0.8)';
+            landmarksCtx.lineWidth = 1.5;
+            landmarksCtx.stroke();
+          }
         }
       } else {
-        // HOVER
         stateRef.current.lastDrawPoint = null;
+        stateRef.current.smoothedPoint = null;
 
-        // Draw hover cursor on landmarks canvas
+        // Hover cursor
         if (landmarksCtx && !stateRef.current.showLandmarks) {
           landmarksCtx.beginPath();
           landmarksCtx.arc(tipPos.x, tipPos.y, stateRef.current.brushSize / 2 + 2, 0, 2 * Math.PI);
@@ -238,10 +415,14 @@ export default function App() {
         }
       }
     } else {
-      // No hands detected
       stateRef.current.lastDrawPoint = null;
+      stateRef.current.smoothedPoint = null;
+      stateRef.current.dwellIdx = -1;
+      stateRef.current.dwellFrames = 0;
+      setDwellIdx(-1);
+      setDwellProgress(0);
     }
-  }, [clearCanvas]);
+  }, [clearCanvas, undoLastStroke, saveSnapshot]);
 
   useEffect(() => {
     if (!isStarted) return;
@@ -256,7 +437,7 @@ export default function App() {
         });
 
         hands.setOptions({
-          maxNumHands: 1,
+          maxNumHands: 2,
           modelComplexity: 0,
           minDetectionConfidence: 0.3,
           minTrackingConfidence: 0.3
@@ -314,9 +495,8 @@ export default function App() {
             AIR WRITER
           </h1>
           <p className="font-sans text-secondary mb-12 max-w-[500px] w-full text-center leading-relaxed text-base sm:text-lg">
-            Hold up your hand to move the cursor.<br />
-            Pinch your index and thumb to draw.<br />
-            Make a fist to clear the canvas.
+            <strong className="text-primary">Right hand:</strong> Pinch (index + thumb) to draw. Middle finger only = erase. Hover index over a color to pick it.<br />
+            <strong className="text-yellow-400">Left hand:</strong> Pinch = undo. Fist = clear all.
           </p>
           <button
             onClick={() => setIsStarted(true)}
@@ -381,11 +561,19 @@ export default function App() {
           <div className="absolute top-24 left-4 sm:left-lg glass-panel px-3 sm:px-md py-2 sm:py-sm rounded-2xl flex flex-col gap-1 sm:gap-sm border border-outline-variant/20 z-40 pointer-events-none">
             <div className="flex items-center gap-2 opacity-80">
               <span className="material-symbols-outlined text-primary text-[16px] sm:text-[18px]">pinch</span>
-              <span className="font-sans font-bold text-[10px] sm:text-[12px] text-on-surface uppercase tracking-widest">Pinch to Draw</span>
+              <span className="font-sans font-bold text-[10px] sm:text-[12px] text-on-surface uppercase tracking-widest">R: Pinch to Draw</span>
             </div>
             <div className="flex items-center gap-2 opacity-80">
-              <span className="material-symbols-outlined text-primary text-[16px] sm:text-[18px]">front_hand</span>
-              <span className="font-sans font-bold text-[10px] sm:text-[12px] text-on-surface uppercase tracking-widest">Fist to Clear</span>
+              <span className="material-symbols-outlined text-primary text-[16px] sm:text-[18px]">back_hand</span>
+              <span className="font-sans font-bold text-[10px] sm:text-[12px] text-on-surface uppercase tracking-widest">R: Middle finger = Erase</span>
+            </div>
+            <div className="flex items-center gap-2 opacity-60">
+              <span className="material-symbols-outlined text-yellow-400 text-[16px] sm:text-[18px]">undo</span>
+              <span className="font-sans font-bold text-[10px] sm:text-[12px] text-on-surface uppercase tracking-widest">L: Pinch = Undo</span>
+            </div>
+            <div className="flex items-center gap-2 opacity-60">
+              <span className="material-symbols-outlined text-red-400 text-[16px] sm:text-[18px]">front_hand</span>
+              <span className="font-sans font-bold text-[10px] sm:text-[12px] text-on-surface uppercase tracking-widest">L: Fist = Clear</span>
             </div>
           </div>
 
@@ -404,12 +592,29 @@ export default function App() {
               {/* Colors */}
               <div className="flex gap-2 overflow-x-auto hide-scrollbar scroll-smooth snap-x pb-1 md:pb-0">
                 {COLORS.map((color, idx) => (
-                  <button
-                    key={color}
-                    onClick={() => setActiveColorIdx(idx)}
-                    className={`shrink-0 snap-center w-8 h-8 md:w-10 md:h-10 rounded-full border-2 transition-all duration-200 ${activeColorIdx === idx ? 'border-primary shadow-[0_0_15px_rgba(255,255,255,0.7)] scale-110' : 'border-transparent hover:border-primary/50'}`}
-                    style={{ backgroundColor: color }}
-                  />
+                  <div key={color} className="relative shrink-0 snap-center">
+                    {/* Dwell progress ring */}
+                    {dwellIdx === idx && dwellProgress > 0 && (
+                      <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 40 40">
+                        <circle
+                          cx="20" cy="20" r="18"
+                          fill="none"
+                          stroke="white"
+                          strokeWidth="3"
+                          strokeDasharray={`${dwellProgress * 113} 113`}
+                          strokeLinecap="round"
+                          transform="rotate(-90 20 20)"
+                          opacity="0.9"
+                        />
+                      </svg>
+                    )}
+                    <button
+                      ref={el => { colorSwatchRefs.current[idx] = el; }}
+                      onClick={() => setActiveColorIdx(idx)}
+                      className={`w-8 h-8 md:w-10 md:h-10 rounded-full border-2 transition-all duration-200 ${activeColorIdx === idx ? 'border-primary shadow-[0_0_15px_rgba(255,255,255,0.7)] scale-110' : 'border-transparent hover:border-primary/50'}`}
+                      style={{ backgroundColor: color }}
+                    />
+                  </div>
                 ))}
               </div>
             </div>
@@ -435,6 +640,21 @@ export default function App() {
                 <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>visibility</span>
                 <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Marks</span>
               </button>
+
+              <button
+                onClick={undoLastStroke}
+                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-yellow-400 hover:bg-yellow-400/10 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-20 md:w-24"
+              >
+                <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>undo</span>
+                <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Undo</span>
+              </button>
+
+              <div
+                className={`flex flex-col items-center justify-center py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-20 md:w-24 transition-all ${isErasing ? 'bg-white/20 text-white' : 'text-on-surface-variant opacity-40'}`}
+              >
+                <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>ink_eraser</span>
+                <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Eraser</span>
+              </div>
 
               <button
                 onClick={exportCanvas}
