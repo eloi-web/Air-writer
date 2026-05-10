@@ -1,0 +1,6 @@
+{
+  "name": "Air Writer",
+  "description": "A high-tech digital canvas for drawing over webcam feed.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": []
+}
