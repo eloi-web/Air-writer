@@ -1,6 +1,29 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 @import "tailwindcss";
+
+@font-face {
+  font-family: 'Arista Pro';
+  src: url('/fonts/Arista-Pro-Light-trial.ttf') format('truetype');
+  font-weight: 300 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Arista Pro';
+  src: url('/fonts/Arista-Pro-Bold-trial.ttf') format('truetype');
+  font-weight: 600 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Arista Pro';
+  src: url('/fonts/Arista-Pro-Fat-trial.ttf') format('truetype');
+  font-weight: 800 900;
+  font-style: normal;
+  font-display: swap;
+}
 
 @theme {
   --color-surface: #141313;
@@ -51,13 +74,13 @@
   --color-on-background: #e5e2e1;
   --color-surface-variant: #353434;
 
-  --font-headline-xl: "Space Mono", ui-monospace, SFMono-Regular, monospace;
-  --font-headline-lg: "Space Mono", ui-monospace, SFMono-Regular, monospace;
-  --font-headline-md: "Space Mono", ui-monospace, SFMono-Regular, monospace;
-  --font-body-lg: "Montserrat", ui-sans-serif, system-ui, sans-serif;
-  --font-body-md: "Montserrat", ui-sans-serif, system-ui, sans-serif;
-  --font-label-sm: "Space Mono", ui-monospace, SFMono-Regular, monospace;
-  --font-headline-lg-mobile: "Space Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-headline-xl: "Arista Pro", ui-sans-serif, system-ui, sans-serif;
+  --font-headline-lg: "Arista Pro", ui-sans-serif, system-ui, sans-serif;
+  --font-headline-md: "Arista Pro", ui-sans-serif, system-ui, sans-serif;
+  --font-body-lg: "Arista Pro", ui-sans-serif, system-ui, sans-serif;
+  --font-body-md: "Arista Pro", ui-sans-serif, system-ui, sans-serif;
+  --font-label-sm: "Arista Pro", ui-sans-serif, system-ui, sans-serif;
+  --font-headline-lg-mobile: "Arista Pro", ui-sans-serif, system-ui, sans-serif;
 
   --text-headline-xl: 40px;
   --text-headline-xl--line-height: 1.2;
@@ -108,24 +131,26 @@
 
 @layer utilities {
   .glass-panel {
-      background-color: rgba(26, 26, 26, 0.6);
-      backdrop-filter: blur(20px);
-      border: 1px solid rgba(240, 240, 240, 0.1);
+    background-color: rgba(26, 26, 26, 0.6);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(240, 240, 240, 0.1);
   }
 
   .glass-panel-active {
-      box-shadow: 0 0 15px rgba(240, 240, 240, 0.05);
+    box-shadow: 0 0 15px rgba(240, 240, 240, 0.05);
   }
-  
+
   .no-scrollbar::-webkit-scrollbar {
-      display: none;
+    display: none;
   }
+
   .no-scrollbar {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
 
 body {
   background-color: #000000;
+  font-family: 'Arista Pro', ui-sans-serif, system-ui, sans-serif;
 }
