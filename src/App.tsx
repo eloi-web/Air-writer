@@ -310,7 +310,7 @@ export default function App() {
       {/* INITIAL PROMPT STATE */}
       {!isStarted && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] bg-black/95 backdrop-blur-lg px-4 sm:px-8">
-          <h1 className="font-mono text-4xl sm:text-5xl md:text-6xl font-bold text-primary mb-6 tracking-[0.2em] drop-shadow-[0_0_15px_rgba(240,240,240,0.8)] text-center break-keep">
+          <h1 className="font-body-md text-4xl sm:text-5xl md:text-6xl font-bold text-primary mb-6 tracking-[0.2em] drop-shadow-[0_0_15px_rgba(240,240,240,0.8)] text-center break-keep">
             AIR WRITER
           </h1>
           <p className="font-sans text-secondary mb-12 max-w-[500px] w-full text-center leading-relaxed text-base sm:text-lg">
