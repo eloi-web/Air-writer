@@ -1,9 +1,15 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+﻿import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Webcam from 'react-webcam';
 import { Hands, Results } from '@mediapipe/hands';
 import { Camera } from '@mediapipe/camera_utils';
 
-const COLORS = ['#02f71b', '#F0F0F0', '#FF3B30', '#007AFF', '#FFCC00', '#FF00FF'];
+const PALETTES = {
+  neon: ['#02f71b', '#F0F0F0', '#FF3B30', '#007AFF', '#FFCC00', '#FF00FF'],
+  pastel: ['#F9A8D4', '#FDE68A', '#A7F3D0', '#BAE6FD', '#DDD6FE', '#FECACA'],
+  mono: ['#FFFFFF', '#BBBBBB', '#888888', '#555555', '#222222', '#111111'],
+} as const;
+type PaletteName = keyof typeof PALETTES;
+const PALETTE_ORDER: PaletteName[] = ['neon', 'pastel', 'mono'];
 
 // Stroke smoothing: exponential moving average factor (0=no smoothing, 1=full lag)
 const SMOOTHING = 0.5;
@@ -15,17 +21,25 @@ export default function App() {
   const webcamRef = useRef<Webcam>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const landmarksCanvasRef = useRef<HTMLCanvasElement>(null);
+  const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isStarted, setIsStarted] = useState(false);
   const [isReady, setIsReady] = useState(false);
 
+  const [palette, setPalette] = useState<PaletteName>('neon');
   const [activeColorIdx, setActiveColorIdx] = useState(0);
   const [brushSize, setBrushSize] = useState(8);
   const [showLandmarks, setShowLandmarks] = useState(false);
   const [isFisting, setIsFisting] = useState(false);
   const [isErasing, setIsErasing] = useState(false);
-  // dwellIdx: which color swatch the right-hand index is hovering (-1 = none), dwellProgress 0–1
+  const [bgMode, setBgMode] = useState<'plain' | 'dots' | 'lines'>('plain');
+  const [strokeCount, setStrokeCount] = useState(0);
+  const [showHelp, setShowHelp] = useState(false);
+  const [toolbarOpen, setToolbarOpen] = useState(false);
+  // dwellIdx: which color swatch the right-hand index is hovering (-1 = none), dwellProgress 0â€“1
   const [dwellIdx, setDwellIdx] = useState(-1);
   const [dwellProgress, setDwellProgress] = useState(0);
+
+  const COLORS = PALETTES[palette];
 
   // Undo history: array of ImageData snapshots
   const undoStackRef = useRef<ImageData[]>([]);
@@ -34,7 +48,7 @@ export default function App() {
 
   // We keep mutable state in refs to avoid adding them to onResults dependencies
   const stateRef = useRef({
-    color: COLORS[0],
+    color: PALETTES.neon[0] as string,
     brushSize: 8,
     showLandmarks: false,
     isFisting: false,
@@ -43,22 +57,26 @@ export default function App() {
     smoothedPoint: null as { x: number, y: number } | null,
     canvasCtx: null as CanvasRenderingContext2D | null,
     landmarksCtx: null as CanvasRenderingContext2D | null,
+    bgCtx: null as CanvasRenderingContext2D | null,
     // color dwell tracking
     dwellIdx: -1,
     dwellFrames: 0,
     // left-hand undo pinch tracking
     leftPinchWasActive: false,
     leftFistWasActive: false,
+    // colors synced from palette â€” accessible inside onResults without recreating the callback
+    colors: [...PALETTES.neon] as string[],
   });
 
   // Sync state to refs
   useEffect(() => {
-    stateRef.current.color = COLORS[activeColorIdx];
+    stateRef.current.color = PALETTES[palette][activeColorIdx];
+    stateRef.current.colors = [...PALETTES[palette]];
     stateRef.current.brushSize = brushSize;
     stateRef.current.showLandmarks = showLandmarks;
     stateRef.current.isFisting = isFisting;
     stateRef.current.isErasing = isErasing;
-  }, [activeColorIdx, brushSize, showLandmarks, isFisting, isErasing]);
+  }, [palette, activeColorIdx, brushSize, showLandmarks, isFisting, isErasing]);
 
   // Handle Resize
   useEffect(() => {
@@ -78,6 +96,12 @@ export default function App() {
         stateRef.current.canvasCtx = canvasRef.current.getContext('2d');
         stateRef.current.landmarksCtx = landmarksCanvasRef.current.getContext('2d');
 
+        if (bgCanvasRef.current) {
+          bgCanvasRef.current.width = bgCanvasRef.current.offsetWidth;
+          bgCanvasRef.current.height = bgCanvasRef.current.offsetHeight;
+          stateRef.current.bgCtx = bgCanvasRef.current.getContext('2d');
+        }
+
         if (saved && stateRef.current.canvasCtx) {
           stateRef.current.canvasCtx.putImageData(saved, 0, 0);
         }
@@ -90,6 +114,38 @@ export default function App() {
       clearTimeout(timer);
     };
   }, [isStarted]);
+
+  // Draw background grid / dots / lines on the bg canvas
+  useEffect(() => {
+    const canvas = bgCanvasRef.current;
+    if (!canvas || canvas.width === 0 || canvas.height === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    if (bgMode === 'dots') {
+      const gap = 30;
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      for (let x = gap; x < w; x += gap) {
+        for (let y = gap; y < h; y += gap) {
+          ctx.beginPath();
+          ctx.arc(x, y, 1.5, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+      }
+    } else if (bgMode === 'lines') {
+      const gap = 40;
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+      ctx.lineWidth = 1;
+      for (let y = gap; y < h; y += gap) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+    }
+  }, [bgMode, isReady]);
 
   // Keyboard undo: Ctrl+Z
   useEffect(() => {
@@ -195,7 +251,7 @@ export default function App() {
         getDist3D(tip3D, mcp3D) < getDist3D(pip3D, mcp3D);
     };
 
-    // ─── SEPARATE HANDS BY HANDEDNESS ───────────────────────────────────────
+    // â”€â”€â”€ SEPARATE HANDS BY HANDEDNESS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let rightLandmarks: any[] | null = null;
     let leftLandmarks: any[] | null = null;
 
@@ -208,7 +264,7 @@ export default function App() {
       });
     }
 
-    // ─── LEFT HAND: UNDO (pinch) and CLEAR (fist) ───────────────────────────
+    // â”€â”€â”€ LEFT HAND: UNDO (pinch) and CLEAR (fist) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (leftLandmarks) {
       const lm = leftLandmarks as any[];
       const wrist3D = lm[0];
@@ -241,7 +297,7 @@ export default function App() {
       stateRef.current.leftPinchWasActive = false;
     }
 
-    // ─── RIGHT HAND: DRAW / ERASE / COLOR PICK ──────────────────────────────
+    // â”€â”€â”€ RIGHT HAND: DRAW / ERASE / COLOR PICK â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (rightLandmarks) {
       const lm = rightLandmarks as any[];
       const wrist3D = lm[0];
@@ -284,7 +340,7 @@ export default function App() {
       // Eraser uses middle fingertip as draw point
       const erasePoint = middlePos;
 
-      // ── COLOR PICKER VIA DWELL ─────────────────────────────────────────────
+      // â”€â”€ COLOR PICKER VIA DWELL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       // Only do color dwell when NOT drawing/erasing
       if (!isPinching && !eraserGesture) {
         let foundSwatchIdx = -1;
@@ -310,7 +366,7 @@ export default function App() {
           setDwellProgress(Math.min(progress, 1));
           if (stateRef.current.dwellFrames >= COLOR_DWELL_FRAMES) {
             setActiveColorIdx(foundSwatchIdx);
-            stateRef.current.color = COLORS[foundSwatchIdx];
+            stateRef.current.color = stateRef.current.colors[foundSwatchIdx];
             stateRef.current.dwellFrames = 0;
             setDwellProgress(0);
           }
@@ -327,7 +383,7 @@ export default function App() {
         setDwellProgress(0);
       }
 
-      // ── DRAW / ERASE ────────────────────────────────────────────────────────
+      // â”€â”€ DRAW / ERASE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       const activePoint = eraserGesture ? erasePoint : rawPoint;
 
       // Smooth the point via exponential moving average
@@ -340,6 +396,10 @@ export default function App() {
         stateRef.current.smoothedPoint = { ...activePoint };
       }
       const smoothed = stateRef.current.smoothedPoint;
+
+      // Pressure simulation: tighter pinch â†’ thinner stroke, looser â†’ thicker
+      const pinchRatio = Math.min(pinchDist3D / (palmSize3D * 1.1), 1);
+      const pressureWidth = stateRef.current.brushSize * (0.4 + pinchRatio * 1.2);
 
       if (fist && !eraserGesture) {
         // Right-hand fist only clears when NO left hand (left hand handles undo/clear)
@@ -356,7 +416,7 @@ export default function App() {
           canvasCtx.beginPath();
           canvasCtx.moveTo(stateRef.current.lastDrawPoint.x, stateRef.current.lastDrawPoint.y);
           canvasCtx.lineTo(smoothed.x, smoothed.y);
-          canvasCtx.lineWidth = eraserGesture ? stateRef.current.brushSize * 3 : stateRef.current.brushSize;
+          canvasCtx.lineWidth = eraserGesture ? stateRef.current.brushSize * 3 : pressureWidth;
           canvasCtx.lineCap = 'round';
           canvasCtx.lineJoin = 'round';
 
@@ -374,8 +434,9 @@ export default function App() {
           canvasCtx.shadowBlur = 0;
           canvasCtx.globalCompositeOperation = 'source-over';
         } else {
-          // Stroke just started — save snapshot before first draw
+          // Stroke just started â€” save snapshot before first draw
           saveSnapshot();
+          setStrokeCount(c => c + 1);
         }
         stateRef.current.lastDrawPoint = smoothed;
 
@@ -482,7 +543,8 @@ export default function App() {
   }, [onResults, isStarted]);
 
   return (
-    <div className={`text-on-background h-screen w-screen flex flex-col overflow-hidden font-body-md relative bg-[#000000] transition-colors duration-500`}>
+    <div className="text-on-background h-screen w-screen flex flex-col overflow-hidden font-body-md relative bg-[#000000] transition-colors duration-500">
+
       {/* INITIAL PROMPT STATE */}
       {!isStarted && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-100 bg-black/95 backdrop-blur-lg px-4 sm:px-8">
@@ -490,7 +552,7 @@ export default function App() {
             AIR WRITER
           </h1>
           <p className="font-sans text-secondary mb-12 max-w-125 w-full text-center leading-relaxed text-base sm:text-lg">
-            <strong className="text-primary">Right hand:</strong> Pinch (index + thumb) to draw. Middle finger only = erase. Hover index over a color to pick it.<br />
+            <strong className="text-primary">Right hand:</strong> Pinch to draw (pressure-sensitive). Middle finger only = erase. Hover over a color 1.5s to pick it.<br />
             <strong className="text-yellow-400">Left hand:</strong> Pinch = undo. Fist = clear all.
           </p>
           <button
@@ -511,19 +573,12 @@ export default function App() {
               ref={webcamRef}
               className="absolute inset-0 w-full h-full object-cover object-center opacity-60 mix-blend-screen"
               mirrored={true}
-              videoConstraints={{
-                facingMode: "user"
-              }}
+              videoConstraints={{ facingMode: "user" }}
             />
-            <canvas
-              ref={canvasRef}
-              className="absolute inset-0 pointer-events-none w-full h-full object-cover"
-            />
-            <canvas
-              ref={landmarksCanvasRef}
-              className="absolute inset-0 pointer-events-none w-full h-full object-cover z-10"
-            />
-            <div className={`absolute inset-0 pointer-events-none bg-white transition-opacity duration-300 z-20 ${isFisting ? 'opacity-20' : 'opacity-0'}`} />
+            <canvas ref={bgCanvasRef} className="absolute inset-0 pointer-events-none w-full h-full z-[1]" />
+            <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none w-full h-full z-[2]" />
+            <canvas ref={landmarksCanvasRef} className="absolute inset-0 pointer-events-none w-full h-full z-[3]" />
+            <div className={`absolute inset-0 pointer-events-none bg-white transition-opacity duration-300 z-[4] ${isFisting ? 'opacity-20' : 'opacity-0'}`} />
           </div>
         </div>
       )}
@@ -534,7 +589,13 @@ export default function App() {
           AIR WRITER
         </div>
         <div className="flex items-center gap-sm pointer-events-auto">
-          <a href="#" className="text-secondary hover:text-primary transition-colors p-sm rounded-full glass-panel scale-95 hover:scale-100">
+          <button
+            onClick={() => setShowHelp(s => !s)}
+            className="text-secondary hover:text-primary transition-colors p-sm rounded-full glass-panel scale-95 hover:scale-100"
+          >
+            <span className="material-symbols-outlined text-xl">help_outline</span>
+          </button>
+          <a href="https://github.com/eloi-web/Air-writer" target="_blank" rel="noreferrer" className="text-secondary hover:text-primary transition-colors p-sm rounded-full glass-panel scale-95 hover:scale-100">
             <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
               <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
             </svg>
@@ -542,7 +603,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content Info */}
+      {/* Loading */}
       {isStarted && !isReady && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-30 pointer-events-none bg-black/80 backdrop-blur-sm">
           <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />
@@ -550,7 +611,7 @@ export default function App() {
         </div>
       )}
 
-      {/* HUD Info */}
+      {/* HUD */}
       {isStarted && isReady && (
         <>
           <div className="absolute top-24 left-4 sm:left-lg glass-panel px-3 sm:px-md py-2 sm:py-sm rounded-2xl flex flex-col gap-1 sm:gap-sm border border-outline-variant/20 z-40 pointer-events-none">
@@ -560,7 +621,7 @@ export default function App() {
             </div>
             <div className="flex items-center gap-2 opacity-80">
               <span className="material-symbols-outlined text-primary text-[16px] sm:text-[18px]">back_hand</span>
-              <span className="font-sans font-bold text-[10px] sm:text-[12px] text-on-surface uppercase tracking-widest">R: Middle finger = Erase</span>
+              <span className="font-sans font-bold text-[10px] sm:text-[12px] text-on-surface uppercase tracking-widest">R: Middle = Erase</span>
             </div>
             <div className="flex items-center gap-2 opacity-60">
               <span className="material-symbols-outlined text-yellow-400 text-[16px] sm:text-[18px]">undo</span>
@@ -569,6 +630,10 @@ export default function App() {
             <div className="flex items-center gap-2 opacity-60">
               <span className="material-symbols-outlined text-red-400 text-[16px] sm:text-[18px]">front_hand</span>
               <span className="font-sans font-bold text-[10px] sm:text-[12px] text-on-surface uppercase tracking-widest">L: Fist = Clear</span>
+            </div>
+            <div className="flex items-center gap-2 opacity-40 mt-1 border-t border-outline-variant/20 pt-1">
+              <span className="material-symbols-outlined text-on-surface-variant text-[16px] sm:text-[18px]">edit</span>
+              <span className="font-sans font-bold text-[10px] sm:text-[12px] text-on-surface-variant uppercase tracking-widest">Strokes: {strokeCount}</span>
             </div>
           </div>
 
@@ -579,28 +644,27 @@ export default function App() {
             </div>
           </div>
 
-          {/* Bottom Nav / Controls */}
-          <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[95%] md:w-max max-w-125 md:max-w-none z-50 flex flex-col md:flex-row gap-3 md:gap-md p-3 md:p-sm glass-panel bg-surface-container/80 rounded-[2rem] md:rounded-full backdrop-blur-xl border border-outline-variant/10 shadow-2xl items-center pointer-events-auto">
+          {/* Mobile FAB */}
+          <button
+            className="md:hidden fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-primary text-on-primary shadow-2xl flex items-center justify-center pointer-events-auto transition-transform active:scale-95"
+            onClick={() => setToolbarOpen(o => !o)}
+          >
+            <span className="material-symbols-outlined text-2xl">{toolbarOpen ? 'close' : 'tune'}</span>
+          </button>
 
-            {/* Top row on mobile: Colors and Brush size */}
+          {/* Bottom Nav / Controls */}
+          <nav className={`fixed bottom-4 left-1/2 -translate-x-1/2 w-[95%] md:w-max max-w-125 md:max-w-none z-50 flex-col md:flex-row gap-3 md:gap-md p-3 md:p-sm glass-panel bg-surface-container/80 rounded-[2rem] md:rounded-full backdrop-blur-xl border border-outline-variant/10 shadow-2xl items-center pointer-events-auto mb-[4.5rem] md:mb-0 ${toolbarOpen ? 'flex' : 'hidden'} md:flex`}>
+
+            {/* Colors */}
             <div className="flex w-full md:w-auto items-center justify-between md:justify-start gap-4 md:gap-2 px-2 md:border-r md:border-outline-variant/30 md:pr-4">
-              {/* Colors */}
-              <div className="flex gap-2 overflow-x-auto hide-scrollbar scroll-smooth snap-x pb-1 md:pb-0">
+              <div className="flex gap-2 overflow-x-auto no-scrollbar scroll-smooth snap-x pb-1 md:pb-0">
                 {COLORS.map((color, idx) => (
-                  <div key={color} className="relative shrink-0 snap-center">
-                    {/* Dwell progress ring */}
+                  <div key={`${palette}-${idx}`} className="relative shrink-0 snap-center">
                     {dwellIdx === idx && dwellProgress > 0 && (
                       <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 40 40">
-                        <circle
-                          cx="20" cy="20" r="18"
-                          fill="none"
-                          stroke="white"
-                          strokeWidth="3"
-                          strokeDasharray={`${dwellProgress * 113} 113`}
-                          strokeLinecap="round"
-                          transform="rotate(-90 20 20)"
-                          opacity="0.9"
-                        />
+                        <circle cx="20" cy="20" r="18" fill="none" stroke="white" strokeWidth="3"
+                          strokeDasharray={`${dwellProgress * 113} 113`} strokeLinecap="round"
+                          transform="rotate(-90 20 20)" opacity="0.9" />
                       </svg>
                     )}
                     <button
@@ -618,51 +682,59 @@ export default function App() {
             <div className="flex w-full md:w-auto items-center justify-between md:justify-center gap-3 px-2 md:px-4 md:border-r md:border-outline-variant/30">
               <span className="material-symbols-outlined text-secondary text-sm">line_weight</span>
               <input
-                type="range"
-                min="2" max="30"
-                value={brushSize}
+                type="range" min="2" max="30" value={brushSize}
                 onChange={(e) => setBrushSize(parseInt(e.target.value))}
                 className="grow md:w-32 accent-primary h-1.5 bg-surface-variant rounded-lg appearance-none cursor-pointer"
               />
             </div>
 
             {/* Actions */}
-            <div className="flex w-full md:w-auto items-center justify-around md:justify-center gap-1 px-1 pt-2 border-t border-outline-variant/30 md:border-t-0 md:pt-0">
-              <button
-                onClick={() => setShowLandmarks(s => !s)}
-                className={`flex flex-col items-center justify-center py-2 px-1 sm:px-3 rounded-xl transition-all w-16 sm:w-20 md:w-24 ${showLandmarks ? 'bg-[#02f71b]/20 text-[#02f71b]' : 'text-on-surface-variant hover:text-primary hover:bg-white/5'}`}
-              >
+            <div className="flex w-full md:w-auto items-center justify-around md:justify-center gap-1 px-1 pt-2 border-t border-outline-variant/30 md:border-t-0 md:pt-0 flex-wrap md:flex-nowrap">
+
+              <button onClick={() => setShowLandmarks(s => !s)}
+                className={`flex flex-col items-center justify-center py-2 px-1 sm:px-3 rounded-xl transition-all w-16 sm:w-[4.5rem] ${showLandmarks ? 'bg-[#02f71b]/20 text-[#02f71b]' : 'text-on-surface-variant hover:text-primary hover:bg-white/5'}`}>
                 <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>visibility</span>
                 <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Marks</span>
               </button>
 
-              <button
-                onClick={undoLastStroke}
-                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-yellow-400 hover:bg-yellow-400/10 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-20 md:w-24"
-              >
+              <button onClick={undoLastStroke}
+                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-yellow-400 hover:bg-yellow-400/10 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-[4.5rem]">
                 <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>undo</span>
                 <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Undo</span>
               </button>
 
-              <div
-                className={`flex flex-col items-center justify-center py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-20 md:w-24 transition-all ${isErasing ? 'bg-white/20 text-white' : 'text-on-surface-variant opacity-40'}`}
-              >
+              <div className={`flex flex-col items-center justify-center py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-[4.5rem] transition-all ${isErasing ? 'bg-white/20 text-white' : 'text-on-surface-variant opacity-40'}`}>
                 <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>ink_eraser</span>
-                <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Eraser</span>
+                <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Erase</span>
               </div>
 
               <button
-                onClick={exportCanvas}
-                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-20 md:w-24"
-              >
+                onClick={() => setBgMode(m => m === 'plain' ? 'dots' : m === 'dots' ? 'lines' : 'plain')}
+                className={`flex flex-col items-center justify-center py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-[4.5rem] transition-all ${bgMode !== 'plain' ? 'text-primary bg-white/5' : 'text-on-surface-variant hover:text-primary hover:bg-white/5'}`}>
+                <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>
+                  {bgMode === 'dots' ? 'apps' : bgMode === 'lines' ? 'format_align_justify' : 'grid_off'}
+                </span>
+                <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">{bgMode}</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setPalette(p => PALETTE_ORDER[(PALETTE_ORDER.indexOf(p) + 1) % PALETTE_ORDER.length]);
+                  setActiveColorIdx(0);
+                }}
+                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-[4.5rem]">
+                <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>palette</span>
+                <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider capitalize">{palette}</span>
+              </button>
+
+              <button onClick={exportCanvas}
+                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-[4.5rem]">
                 <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>photo_camera</span>
                 <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Save</span>
               </button>
 
-              <button
-                onClick={clearCanvas}
-                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-20 md:w-24"
-              >
+              <button onClick={clearCanvas}
+                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-[4.5rem]">
                 <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>delete_sweep</span>
                 <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Clear</span>
               </button>
@@ -670,12 +742,8 @@ export default function App() {
               <div className="hidden md:block w-px h-8 bg-outline-variant/30 my-auto mx-1"></div>
 
               <button
-                onClick={() => {
-                  setIsStarted(false);
-                  setIsReady(false);
-                }}
-                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-20 md:w-24"
-              >
+                onClick={() => { setIsStarted(false); setIsReady(false); setStrokeCount(0); setToolbarOpen(false); }}
+                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-[4.5rem]">
                 <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>stop_circle</span>
                 <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Stop</span>
               </button>
@@ -684,7 +752,43 @@ export default function App() {
           </nav>
         </>
       )}
+
+      {/* Gestures & shortcuts help modal */}
+      {showHelp && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md pointer-events-auto"
+          onClick={() => setShowHelp(false)}
+        >
+          <div className="glass-panel rounded-2xl p-6 max-w-sm w-[90%]" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="font-bold text-primary text-lg tracking-wide">Gestures & Shortcuts</h2>
+              <button onClick={() => setShowHelp(false)} className="text-on-surface-variant hover:text-primary">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="flex flex-col gap-3">
+              {([
+                ['pinch', 'R: Pinch', 'Draw  (pressure-sensitive)'],
+                ['back_hand', 'R: Middle finger only', 'Erase mode'],
+                ['front_hand', 'R: Fist', 'Clear canvas'],
+                ['undo', 'L: Pinch', 'Undo last stroke'],
+                ['front_hand', 'L: Fist', 'Clear all'],
+                ['search', 'Hover color 1.5s', 'Pick color'],
+                ['keyboard', 'Ctrl + Z', 'Undo'],
+                ['apps', 'Grid button', 'Toggle background'],
+                ['palette', 'Palette button', 'Cycle neon/pastel/mono'],
+              ] as const).map(([icon, gesture, action]) => (
+                <div key={gesture} className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-primary text-[18px] w-6 shrink-0">{icon}</span>
+                  <span className="font-sans text-on-surface-variant w-40 shrink-0 text-xs">{gesture}</span>
+                  <span className="font-sans text-primary font-semibold text-xs">{action}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
-
