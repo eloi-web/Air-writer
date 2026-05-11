@@ -485,11 +485,11 @@ export default function App() {
     <div className={`text-on-background h-screen w-screen flex flex-col overflow-hidden font-body-md relative bg-[#000000] transition-colors duration-500`}>
       {/* INITIAL PROMPT STATE */}
       {!isStarted && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] bg-black/95 backdrop-blur-lg px-4 sm:px-8">
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-100 bg-black/95 backdrop-blur-lg px-4 sm:px-8">
           <h1 className="font-body-md text-4xl sm:text-5xl md:text-6xl font-bold text-primary mb-6 tracking-[0.2em] drop-shadow-[0_0_15px_rgba(240,240,240,0.8)] text-center break-keep">
             AIR WRITER
           </h1>
-          <p className="font-sans text-secondary mb-12 max-w-[500px] w-full text-center leading-relaxed text-base sm:text-lg">
+          <p className="font-sans text-secondary mb-12 max-w-125 w-full text-center leading-relaxed text-base sm:text-lg">
             <strong className="text-primary">Right hand:</strong> Pinch (index + thumb) to draw. Middle finger only = erase. Hover index over a color to pick it.<br />
             <strong className="text-yellow-400">Left hand:</strong> Pinch = undo. Fist = clear all.
           </p>
@@ -506,7 +506,7 @@ export default function App() {
       {/* CAMERA & CANVAS CONTAINER */}
       {isStarted && (
         <div className="absolute inset-0 md:p-lg flex items-center justify-center z-0 pointer-events-none">
-          <div className="relative w-full h-full md:max-w-6xl md:max-h-[85vh] md:rounded-[3rem] overflow-hidden glass-panel-active md:border md:border-outline-variant/30 flex items-center justify-center pointer-events-auto bg-black/50">
+          <div className="relative w-full h-full md:max-w-6xl md:max-h-[85vh] md:rounded-xl overflow-hidden glass-panel-active md:border md:border-outline-variant/30 flex items-center justify-center pointer-events-auto bg-black/50">
             <Webcam
               ref={webcamRef}
               className="absolute inset-0 w-full h-full object-cover object-center opacity-60 mix-blend-screen"
@@ -534,7 +534,7 @@ export default function App() {
           AIR WRITER
         </div>
         <div className="flex items-center gap-sm pointer-events-auto">
-          <a href="#" className="text-secondary hover:text-primary transition-colors p-sm rounded-full glass-panel scale-95 hover:scale-100 transition-transform">
+          <a href="#" className="text-secondary hover:text-primary transition-colors p-sm rounded-full glass-panel scale-95 hover:scale-100">
             <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
               <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
             </svg>
@@ -580,7 +580,7 @@ export default function App() {
           </div>
 
           {/* Bottom Nav / Controls */}
-          <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[95%] md:w-max max-w-[500px] md:max-w-none z-50 flex flex-col md:flex-row gap-3 md:gap-md p-3 md:p-sm glass-panel bg-surface-container/80 rounded-[2rem] md:rounded-full backdrop-blur-xl border border-outline-variant/10 shadow-2xl items-center pointer-events-auto">
+          <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[95%] md:w-max max-w-125 md:max-w-none z-50 flex flex-col md:flex-row gap-3 md:gap-md p-3 md:p-sm glass-panel bg-surface-container/80 rounded-[2rem] md:rounded-full backdrop-blur-xl border border-outline-variant/10 shadow-2xl items-center pointer-events-auto">
 
             {/* Top row on mobile: Colors and Brush size */}
             <div className="flex w-full md:w-auto items-center justify-between md:justify-start gap-4 md:gap-2 px-2 md:border-r md:border-outline-variant/30 md:pr-4">
@@ -622,7 +622,7 @@ export default function App() {
                 min="2" max="30"
                 value={brushSize}
                 onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                className="flex-grow md:w-32 accent-primary h-1.5 bg-surface-variant rounded-lg appearance-none cursor-pointer"
+                className="grow md:w-32 accent-primary h-1.5 bg-surface-variant rounded-lg appearance-none cursor-pointer"
               />
             </div>
 
