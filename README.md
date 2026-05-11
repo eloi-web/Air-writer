@@ -2,8 +2,6 @@
 
 **AirWriter** is a browser-based air drawing app. Point your webcam at your hands and draw in mid-air — no mouse, no touchscreen, no stylus required.
 
-Live demo: https://air-writer-eloi.vercel.app
-
 ## Features
 
 ### Drawing
