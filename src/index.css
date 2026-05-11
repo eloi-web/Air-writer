@@ -75,13 +75,15 @@
   --color-on-background: #e5e2e1;
   --color-surface-variant: #353434;
 
-  --font-headline-xl: "Arista Pro", "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-headline-lg: "Arista Pro", "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-headline-md: "Arista Pro", "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-body-lg: "Arista Pro", "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-body-md: "Arista Pro", "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-label-sm: "Arista Pro", "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-headline-lg-mobile: "Arista Pro", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-family-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+
+  --font-headline-xl: "Arista Pro", "DM Sans";
+  --font-headline-lg: "Arista Pro", "DM Sans";
+  --font-headline-md: "Arista Pro", "DM Sans";
+  --font-body-lg: "Arista Pro", "DM Sans";
+  --font-body-md: "Arista Pro", "DM Sans";
+  --font-label-sm: "Arista Pro", "DM Sans";
+  --font-headline-lg-mobile: "Arista Pro", "DM Sans";
 
   --text-headline-xl: 40px;
   --text-headline-xl--line-height: 1.2;
@@ -153,5 +155,5 @@
 
 body {
   background-color: #000000;
-  font-family: 'Arista Pro', 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  font-family: 'Arista Pro', 'DM Sans';
 }
