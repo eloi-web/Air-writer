@@ -1,0 +1,18 @@
+{
+  "name": "AirWriter",
+  "short_name": "AirWriter",
+  "description": "Draw in the air with your hands using your webcam.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "landscape-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

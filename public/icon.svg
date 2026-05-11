@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#000000"/>
+  <text x="256" y="310" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="800" font-size="220" fill="#02f71b">AW</text>
+  <circle cx="380" cy="140" r="18" fill="#02f71b" opacity="0.9"/>
+  <circle cx="340" cy="100" r="10" fill="#02f71b" opacity="0.5"/>
+  <circle cx="410" cy="100" r="10" fill="#02f71b" opacity="0.5"/>
+</svg>
