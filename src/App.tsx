@@ -585,10 +585,10 @@ export default function App() {
 
       {/* TopAppBar */}
       <header className="bg-transparent flex justify-between items-center w-full px-lg py-md fixed top-0 left-0 z-50 pointer-events-none">
-        <div className="font-headline-md text-headline-xl text-primary tracking-widest drop-shadow-[0_0_10px_rgba(240,240,240,0.5)]">
+        <div className="font-headline-md text-headline-md md:text-headline-xl text-primary tracking-widest drop-shadow-[0_0_10px_rgba(240,240,240,0.5)]">
           AIR WRITER
         </div>
-        <div className="flex items-center gap-sm pointer-events-auto">
+        <div className="flex items-center gap-sm pointer-events-auto shrink-0">
           <button
             onClick={() => setShowHelp(s => !s)}
             className="text-secondary hover:text-primary transition-colors p-sm rounded-full glass-panel scale-95 hover:scale-100"
