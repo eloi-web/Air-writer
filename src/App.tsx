@@ -575,10 +575,10 @@ export default function App() {
               mirrored={true}
               videoConstraints={{ facingMode: "user" }}
             />
-            <canvas ref={bgCanvasRef} className="absolute inset-0 pointer-events-none w-full h-full z-[1]" />
-            <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none w-full h-full z-[2]" />
-            <canvas ref={landmarksCanvasRef} className="absolute inset-0 pointer-events-none w-full h-full z-[3]" />
-            <div className={`absolute inset-0 pointer-events-none bg-white transition-opacity duration-300 z-[4] ${isFisting ? 'opacity-20' : 'opacity-0'}`} />
+            <canvas ref={bgCanvasRef} className="absolute inset-0 pointer-events-none w-full h-full z-1" />
+            <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none w-full h-full z-2" />
+            <canvas ref={landmarksCanvasRef} className="absolute inset-0 pointer-events-none w-full h-full z-3" />
+            <div className={`absolute inset-0 pointer-events-none bg-white transition-opacity duration-300 z-4 ${isFisting ? 'opacity-20' : 'opacity-0'}`} />
           </div>
         </div>
       )}
@@ -653,7 +653,7 @@ export default function App() {
           </button>
 
           {/* Bottom Nav / Controls */}
-          <nav className={`fixed bottom-4 left-1/2 -translate-x-1/2 w-[95%] md:w-max max-w-125 md:max-w-none z-50 flex-col md:flex-row gap-3 md:gap-md p-3 md:p-sm glass-panel bg-surface-container/80 rounded-[2rem] md:rounded-full backdrop-blur-xl border border-outline-variant/10 shadow-2xl items-center pointer-events-auto mb-[4.5rem] md:mb-0 ${toolbarOpen ? 'flex' : 'hidden'} md:flex`}>
+          <nav className={`fixed bottom-4 left-1/2 -translate-x-1/2 w-[95%] md:w-max max-w-125 md:max-w-none z-50 flex-col md:flex-row gap-3 md:gap-md p-3 md:p-sm glass-panel bg-surface-container/80 rounded-[2rem] md:rounded-full backdrop-blur-xl border border-outline-variant/10 shadow-2xl items-center pointer-events-auto mb-18 md:mb-0 ${toolbarOpen ? 'flex' : 'hidden'} md:flex`}>
 
             {/* Colors */}
             <div className="flex w-full md:w-auto items-center justify-between md:justify-start gap-4 md:gap-2 px-2 md:border-r md:border-outline-variant/30 md:pr-4">
@@ -692,25 +692,25 @@ export default function App() {
             <div className="flex w-full md:w-auto items-center justify-around md:justify-center gap-1 px-1 pt-2 border-t border-outline-variant/30 md:border-t-0 md:pt-0 flex-wrap md:flex-nowrap">
 
               <button onClick={() => setShowLandmarks(s => !s)}
-                className={`flex flex-col items-center justify-center py-2 px-1 sm:px-3 rounded-xl transition-all w-16 sm:w-[4.5rem] ${showLandmarks ? 'bg-[#02f71b]/20 text-[#02f71b]' : 'text-on-surface-variant hover:text-primary hover:bg-white/5'}`}>
+                className={`flex flex-col items-center justify-center py-2 px-1 sm:px-3 rounded-xl transition-all w-16 sm:w-18 ${showLandmarks ? 'bg-[#02f71b]/20 text-[#02f71b]' : 'text-on-surface-variant hover:text-primary hover:bg-white/5'}`}>
                 <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>visibility</span>
                 <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Marks</span>
               </button>
 
               <button onClick={undoLastStroke}
-                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-yellow-400 hover:bg-yellow-400/10 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-[4.5rem]">
+                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-yellow-400 hover:bg-yellow-400/10 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-18">
                 <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>undo</span>
                 <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Undo</span>
               </button>
 
-              <div className={`flex flex-col items-center justify-center py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-[4.5rem] transition-all ${isErasing ? 'bg-white/20 text-white' : 'text-on-surface-variant opacity-40'}`}>
+              <div className={`flex flex-col items-center justify-center py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-18 transition-all ${isErasing ? 'bg-white/20 text-white' : 'text-on-surface-variant opacity-40'}`}>
                 <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>ink_eraser</span>
                 <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Erase</span>
               </div>
 
               <button
                 onClick={() => setBgMode(m => m === 'plain' ? 'dots' : m === 'dots' ? 'lines' : 'plain')}
-                className={`flex flex-col items-center justify-center py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-[4.5rem] transition-all ${bgMode !== 'plain' ? 'text-primary bg-white/5' : 'text-on-surface-variant hover:text-primary hover:bg-white/5'}`}>
+                className={`flex flex-col items-center justify-center py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-18 transition-all ${bgMode !== 'plain' ? 'text-primary bg-white/5' : 'text-on-surface-variant hover:text-primary hover:bg-white/5'}`}>
                 <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>
                   {bgMode === 'dots' ? 'apps' : bgMode === 'lines' ? 'format_align_justify' : 'grid_off'}
                 </span>
@@ -722,19 +722,19 @@ export default function App() {
                   setPalette(p => PALETTE_ORDER[(PALETTE_ORDER.indexOf(p) + 1) % PALETTE_ORDER.length]);
                   setActiveColorIdx(0);
                 }}
-                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-[4.5rem]">
+                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-18">
                 <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>palette</span>
-                <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider capitalize">{palette}</span>
+                <span className="font-sans text-[9px] sm:text-[10px] font-bold tracking-wider capitalize">{palette}</span>
               </button>
 
               <button onClick={exportCanvas}
-                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-[4.5rem]">
+                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-18">
                 <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>photo_camera</span>
                 <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Save</span>
               </button>
 
               <button onClick={clearCanvas}
-                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-[4.5rem]">
+                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-18">
                 <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>delete_sweep</span>
                 <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Clear</span>
               </button>
@@ -743,7 +743,7 @@ export default function App() {
 
               <button
                 onClick={() => { setIsStarted(false); setIsReady(false); setStrokeCount(0); setToolbarOpen(false); }}
-                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-[4.5rem]">
+                className="flex flex-col items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors py-2 px-1 sm:px-3 rounded-xl w-16 sm:w-18">
                 <span className="material-symbols-outlined mb-1 text-[20px] sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0" }}>stop_circle</span>
                 <span className="font-sans text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">Stop</span>
               </button>
@@ -756,7 +756,7 @@ export default function App() {
       {/* Gestures & shortcuts help modal */}
       {showHelp && (
         <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md pointer-events-auto"
+          className="fixed inset-0 z-200 flex items-center justify-center bg-black/80 backdrop-blur-md pointer-events-auto"
           onClick={() => setShowHelp(false)}
         >
           <div className="glass-panel rounded-2xl p-6 max-w-sm w-[90%]" onClick={e => e.stopPropagation()}>
