@@ -756,19 +756,28 @@ export default function App() {
       {/* Gestures & shortcuts help modal */}
       {showHelp && (
         <div
-          className="fixed inset-0 z-200 flex items-center justify-center bg-black/80 backdrop-blur-md pointer-events-auto"
+          className="fixed inset-0 z-200 flex items-center justify-center bg-black/60 backdrop-blur-sm pointer-events-auto"
           onClick={() => setShowHelp(false)}
         >
-          <div className="glass-panel rounded-2xl p-6 max-w-sm w-[90%]" onClick={e => e.stopPropagation()}>
+          <div
+            className="relative w-full max-w-lg rounded-2xl border border-white/10 bg-black/70 backdrop-blur-xl shadow-2xl p-5 pointer-events-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
             <div className="flex justify-between items-center mb-4">
-              <h2 className="font-bold text-primary text-lg tracking-wide">Gestures & Shortcuts</h2>
-              <button onClick={() => setShowHelp(false)} className="text-on-surface-variant hover:text-primary">
-                <span className="material-symbols-outlined">close</span>
+              <h2 className="font-bold text-primary text-sm tracking-widest uppercase">Gestures & Shortcuts</h2>
+              <button
+                onClick={() => setShowHelp(false)}
+                className="text-on-surface-variant hover:text-primary transition-colors"
+              >
+                <span className="material-symbols-outlined text-xl">close</span>
               </button>
             </div>
-            <div className="flex flex-col gap-3">
+
+            {/* Rows — icon | gesture | action in a 3-col grid */}
+            <div className="grid divide-y divide-white/5" style={{ gridTemplateColumns: '20px 1fr 1fr' }}>
               {([
-                ['pinch', 'R: Pinch', 'Draw  (pressure-sensitive)'],
+                ['pinch', 'R: Pinch', 'Draw (pressure-sensitive)'],
                 ['back_hand', 'R: Middle finger only', 'Erase mode'],
                 ['front_hand', 'R: Fist', 'Clear canvas'],
                 ['undo', 'L: Pinch', 'Undo last stroke'],
@@ -776,13 +785,13 @@ export default function App() {
                 ['search', 'Hover color 1.5s', 'Pick color'],
                 ['keyboard', 'Ctrl + Z', 'Undo'],
                 ['apps', 'Grid button', 'Toggle background'],
-                ['palette', 'Palette button', 'Cycle neon/pastel/mono'],
+                ['palette', 'Palette button', 'Cycle neon / pastel / mono'],
               ] as const).map(([icon, gesture, action]) => (
-                <div key={gesture} className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-primary text-[18px] w-6 shrink-0">{icon}</span>
-                  <span className="font-sans text-on-surface-variant w-40 shrink-0 text-xs">{gesture}</span>
-                  <span className="font-sans text-primary font-semibold text-xs">{action}</span>
-                </div>
+                <>
+                  <span key={`${gesture}-icon`} className="material-symbols-outlined text-primary text-base flex items-center py-2.5">{icon}</span>
+                  <span key={`${gesture}-gest`} className="font-sans text-on-surface-variant text-xs flex items-center py-2.5 px-2">{gesture}</span>
+                  <span key={`${gesture}-act`} className="font-sans text-primary font-semibold text-xs flex items-center py-2.5">{action}</span>
+                </>
               ))}
             </div>
           </div>
