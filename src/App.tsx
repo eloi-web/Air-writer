@@ -34,6 +34,11 @@ export default function App() {
   const [bgMode, setBgMode] = useState<'plain' | 'dots' | 'lines'>('plain');
   const [strokeCount, setStrokeCount] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
+  const [helpClosing, setHelpClosing] = useState(false);
+  const closeHelp = useCallback(() => {
+    setHelpClosing(true);
+    setTimeout(() => { setShowHelp(false); setHelpClosing(false); }, 250);
+  }, []);
   const [toolbarOpen, setToolbarOpen] = useState(false);
   // dwellIdx: which color swatch the right-hand index is hovering (-1 = none), dwellProgress 0â€“1
   const [dwellIdx, setDwellIdx] = useState(-1);
@@ -590,7 +595,7 @@ export default function App() {
         </div>
         <div className="flex items-center gap-sm pointer-events-auto shrink-0">
           <button
-            onClick={() => setShowHelp(s => !s)}
+            onClick={() => showHelp ? closeHelp() : setShowHelp(true)}
             className="text-secondary hover:text-primary transition-colors p-sm rounded-full glass-panel scale-95 hover:scale-100"
           >
             <span className="material-symbols-outlined text-xl">help_outline</span>
@@ -758,20 +763,21 @@ export default function App() {
       {showHelp && (
         <div
           className="fixed inset-0 z-[300] pointer-events-auto"
-          onClick={() => setShowHelp(false)}
+          onClick={closeHelp}
         >
           {/* dim overlay */}
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-[250ms] ${helpClosing ? 'opacity-0' : 'opacity-100'}`} />
 
           {/* panel — anchored to right edge */}
           <div
-            className="absolute top-0 right-0 h-full w-72 bg-black/90 border-l border-white/10 backdrop-blur-xl shadow-2xl flex flex-col"
+            className={`absolute top-0 right-0 h-full w-72 bg-black/90 border-l border-white/10 backdrop-blur-xl shadow-2xl flex flex-col transition-transform duration-[250ms] ease-out ${helpClosing ? 'translate-x-full' : 'translate-x-0'}`}
+            style={{ animation: helpClosing ? undefined : 'slideInRight 0.25s ease-out' }}
             onClick={e => e.stopPropagation()}
           >
             {/* header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
               <h2 className="font-bold text-primary text-xs tracking-widest uppercase">Gestures & Shortcuts</h2>
-              <button onClick={() => setShowHelp(false)} className="text-on-surface-variant hover:text-primary transition-colors ml-3 shrink-0">
+              <button onClick={closeHelp} className="text-on-surface-variant hover:text-primary transition-colors ml-3 shrink-0">
                 <span className="material-symbols-outlined text-xl leading-none">close</span>
               </button>
             </div>
